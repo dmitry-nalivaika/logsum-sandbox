@@ -650,6 +650,17 @@ def _counts_csv(tmp_path: Path) -> Path:
     return write_csv(tmp_path, HEADER + "\n".join(rows) + "\n")
 
 
+def _unsorted_counts_csv(tmp_path: Path) -> Path:
+    """Rows deliberately out of order; counts: svc-a/ERROR=3, svc-a/WARN=2, svc-b/INFO=2, svc-b/DEBUG=1."""
+    rows = (
+        ["t,INFO,svc-b,m"] * 2
+        + ["t,DEBUG,svc-b,m"]
+        + ["t,WARN,svc-a,m"] * 2
+        + ["t,ERROR,svc-a,m"] * 3
+    )
+    return write_csv(tmp_path, HEADER + "\n".join(rows) + "\n")
+
+
 class TestMinCount:
     def test_default_is_unfiltered(self, tmp_path: Path) -> None:
         path = _counts_csv(tmp_path)
@@ -668,28 +679,41 @@ class TestMinCount:
     def test_counts_are_not_altered_by_filtering(self, tmp_path: Path) -> None:
         path = _counts_csv(tmp_path)
         full = {(s, lvl): n for s, lvl, n in parse_rows(run_cli(path).stdout)}
-        for s, lvl, n in parse_rows(run_cli(path, "--min-count", "2").stdout):
+        kept = parse_rows(run_cli(path, "--min-count", "2").stdout)
+        assert len(kept) == 2  # guards against passing on empty output
+        for s, lvl, n in kept:
             assert full[(s, lvl)] == n
 
-    def test_sort_order_preserved(self, tmp_path: Path) -> None:
-        rows = parse_rows(run_cli(_counts_csv(tmp_path), "--min-count", "1").stdout)
-        assert rows == sorted(rows, key=lambda r: (r[0], r[1]))
+    def test_sort_order_preserved_with_real_filtering(self, tmp_path: Path) -> None:
+        # Input is out of order and the threshold removes one group, so the
+        # order can only come from sorting the surviving rows.
+        result = run_cli(_unsorted_counts_csv(tmp_path), "--min-count", "2")
+        assert result.returncode == 0
+        assert parse_rows(result.stdout) == [
+            ("svc-a", "ERROR", 3),
+            ("svc-a", "WARN", 2),
+            ("svc-b", "INFO", 2),
+        ]
 
     def test_unknown_groups_are_filtered_like_any_other(self, tmp_path: Path) -> None:
         path = _counts_csv(tmp_path)
         assert ("unknown", "WARN", 1) in parse_rows(run_cli(path).stdout)
-        assert all(r[0] != "unknown" for r in parse_rows(run_cli(path, "--min-count", "2").stdout))
+        kept = parse_rows(run_cli(path, "--min-count", "2").stdout)
+        assert kept  # guards against passing on empty output
+        assert all(r[0] != "unknown" for r in kept)
 
     def test_equals_form_and_flag_before_path(self, tmp_path: Path) -> None:
         path = _counts_csv(tmp_path)
         expected = run_cli(path, "--min-count", "2").stdout
+        assert len(parse_rows(expected)) == 2  # guards against comparing empty to empty
         assert run_cli(path, "--min-count=2").stdout == expected
         assert run_cli("--min-count", "2", path).stdout == expected
 
     def test_input_file_not_modified(self, tmp_path: Path) -> None:
         path = _counts_csv(tmp_path)
         before = path.read_bytes()
-        run_cli(path, "--min-count", "2")
+        result = run_cli(path, "--min-count", "2")
+        assert result.returncode == 0
         assert path.read_bytes() == before
 
 
@@ -702,6 +726,7 @@ class TestMinCountEmptyAfterFilter:
 
     def test_not_the_no_events_message(self, tmp_path: Path) -> None:
         result = run_cli(_counts_csv(tmp_path), "--min-count", "4")
+        assert result.stdout.strip() != ""  # guards against passing on empty output
         assert "No events found." not in result.stdout
 
     def test_header_only_still_says_no_events_found(self) -> None:
