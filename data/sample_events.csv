@@ -1,0 +1,10 @@
+timestamp,level,service,message
+2026-10-01T09:00:01Z,INFO,checkout-service,Order submitted
+2026-10-01T09:00:05Z,ERROR,checkout-service,Payment gateway timeout
+2026-10-01T09:00:07Z,ERROR,checkout-service,Payment gateway timeout
+2026-10-01T09:00:09Z,ERROR,checkout-service,Payment gateway timeout
+2026-10-01T09:01:12Z,INFO,cart-api,Item added to cart
+2026-10-01T09:01:30Z,WARN,cart-api,Slow response from inventory
+2026-10-01T09:02:02Z,INFO,identity-service,Token issued
+2026-10-01T09:02:44Z,INFO,identity-service,Token refreshed
+2026-10-01T09:03:15Z,ERROR,,Unhandled exception in worker
