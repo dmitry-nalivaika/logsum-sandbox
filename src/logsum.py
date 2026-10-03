@@ -110,6 +110,24 @@ def format_summary(counts: Counter[tuple[str, str]]) -> list[str]:
     ]
 
 
+def filter_counts(
+    counts: Counter[tuple[str, str]], min_count: int
+) -> Counter[tuple[str, str]]:
+    """Keep only the (service, level) groups whose count is >= ``min_count``."""
+    return Counter({key: n for key, n in counts.items() if n >= min_count})
+
+
+def _min_count_arg(text: str) -> int:
+    """argparse type: an integer >= 1 (every group has a count of at least 1)."""
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not an integer: {text!r}") from None
+    if value < 1:
+        raise argparse.ArgumentTypeError(f"must be at least 1, got {value}")
+    return value
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point. Returns the process exit status."""
     parser = argparse.ArgumentParser(
@@ -117,8 +135,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         description="Summarize log events by service and level.",
     )
     parser.add_argument("csv_path", metavar="EVENTS_CSV", help="path to events CSV")
+    parser.add_argument(
+        "--min-count",
+        type=_min_count_arg,
+        default=1,
+        metavar="N",
+        help="only show groups with at least N events (integer >= 1; default: 1)",
+    )
     args = parser.parse_args(argv)
     path: str = args.csv_path
+    min_count: int = args.min_count
 
     try:
         with open(path, newline="", encoding="utf-8-sig") as handle:
@@ -133,7 +159,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"error: {path}: {exc}", file=sys.stderr)
         return 1
 
-    print("\n".join(format_summary(counts)))
+    shown = filter_counts(counts, min_count)
+    if counts and not shown:
+        # Events exist but none reach the threshold: not the same as "no events".
+        print(f"No groups with count >= {min_count}.")
+        return 0
+
+    print("\n".join(format_summary(shown)))
     return 0
 
 
