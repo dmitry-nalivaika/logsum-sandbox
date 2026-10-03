@@ -7,13 +7,14 @@ The `logsum` CLI shall read a CSV file containing log events and produce a summa
 
 1. The CLI accepts a CSV file path as a required positional argument.
 2. The CSV input must contain `service` and `level` columns.
-3. For a valid input file, the tool prints one output row for every unique `(service, level)` combination present in the data.
+3. For a valid input file, the tool prints one output row for every unique `(service, level)` combination present in the data, unless `--min-count` removes it (criterion 10).
 4. Each output row includes the service name, the level name, and the corresponding event count.
 5. Counts reflect the number of data rows matching that exact `(service, level)` combination.
 6. Output rows are sorted alphabetically by `service`, then alphabetically by `level`.
 7. When processing completes successfully, the program exits with status code `0`.
 8. The tool writes the summary to standard output.
 9. The tool does not modify the input file.
+10. The CLI accepts an optional `--min-count N` flag, where `N` is an integer of at least `1`. When given, the tool prints only the `(service, level)` groups whose count is greater than or equal to `N` (the threshold is inclusive). When the flag is omitted, the output is identical to the output with `--min-count 1`, which is unfiltered. Filtering changes which rows are printed and nothing else: counts, sort order (criterion 6) and warnings on standard error are unaffected.
 
 
 ## Edge Cases
@@ -32,11 +33,17 @@ Print a clear error message to standard error and exit with status code `1`.
 Print a clear error message to standard error and exit with status code `1`.
 * Input file is unreadable (permissions or I/O error)
 Print a clear error message to standard error and exit with status code `1`.
+* `--min-count` removes every group (the input had events, but none reach `N`)
+Print `No groups with count >= N.` to standard output, with `N` replaced by the value given, and exit with status code `0`. This is distinct from `No events found.`, which means the input had no countable events.
+* `--min-count` given with an input that has no countable events (header only, or every row malformed)
+Print `No events found.` to standard output and exit with status code `0`, exactly as without the flag.
+* `--min-count` value is not an integer, is below `1`, or is missing
+Print a usage error to standard error, print nothing to standard output, and exit with a nonzero status code (`2`, from argument parsing). The input file is not read.
 
 
 ## Out of Scope
 
-* Filtering by date, timestamp, service, or log level.
+* Filtering by date, timestamp, service, or log level. (Filtering by event count via `--min-count` is in scope; see criterion 10.)
 * Custom sorting options.
 * Support for output formats other than plain text.
 * Reading from standard input.
@@ -75,3 +82,14 @@ If every data row is skipped as malformed, nothing is counted, so the tool print
 * `service` and `level` values are trimmed of surrounding whitespace before
   being counted or compared against "unknown" / the header names. Not specified
   either way; chosen for robustness against trailing spaces in CSV exports.
+
+### `--min-count`
+
+* Rejecting values below `1`
+Every group has a count of at least `1`, so `--min-count 0` or a negative value could only ever be a no-op. They are rejected instead, so a typo does not silently disable filtering.
+* Empty-after-filter message
+`No groups with count >= N.` is a wording chosen in implementation. The spec requires only that it differ from `No events found.`
+* Column widths
+Padding is computed from the rows that are printed, so a filtered output can be narrower than the unfiltered one.
+* Exit status for a bad value
+`2` comes from `argparse` and is the same status the tool already returns when the path is missing.
