@@ -73,7 +73,7 @@ def format_summary(counts: Counter[tuple[str, str]]) -> list[str]:
     """Render sorted summary lines: service, level, count."""
     if not counts:
         return [EMPTY_MESSAGE]
-    rows = sorted(counts.items(), reverse=True)
+    rows = sorted(counts.items())
     service_w = max(len(service) for (service, _), _ in rows)
     level_w = max(len(level) for (_, level), _ in rows)
     return [
