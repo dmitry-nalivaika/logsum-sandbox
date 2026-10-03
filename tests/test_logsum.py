@@ -570,6 +570,41 @@ class TestUnreadableFile:
 
 
 # --------------------------------------------------------------------------
+# Unreadable content: bytes that are not valid UTF-8
+# --------------------------------------------------------------------------
+
+_GOOD_ROW = b"2026-10-01T09:00:01Z,INFO,cart-api,ok\n"
+_BAD_ROW = b"2026-10-01T09:00:02Z,INFO,cart-api,caf\xff\n"
+_BYTE_HEADER = HEADER.encode()
+
+# "late" puts the bad byte well past the first 8 KiB read buffer, so the
+# decode error is raised mid-iteration, after many rows were already counted.
+INVALID_UTF8_FILES = {
+    "early": _BYTE_HEADER + _GOOD_ROW + _BAD_ROW + _GOOD_ROW,
+    "late": _BYTE_HEADER + _GOOD_ROW * 1000 + _BAD_ROW + _GOOD_ROW,
+    "in_header": b"timestamp,level,serv\xffice,message\n" + _GOOD_ROW,
+}
+
+
+class TestInvalidUtf8:
+    @pytest.mark.parametrize("name", INVALID_UTF8_FILES)
+    def test_exits_one_with_clean_error(self, tmp_path: Path, name: str) -> None:
+        path = tmp_path / "events.csv"
+        path.write_bytes(INVALID_UTF8_FILES[name])
+        result = run_cli(path)
+        assert result.returncode == 1
+        assert result.stderr.strip() != ""
+        assert "Traceback" not in result.stderr
+        assert "events.csv" in result.stderr
+
+    @pytest.mark.parametrize("name", INVALID_UTF8_FILES)
+    def test_prints_no_partial_summary(self, tmp_path: Path, name: str) -> None:
+        path = tmp_path / "events.csv"
+        path.write_bytes(INVALID_UTF8_FILES[name])
+        assert run_cli(path).stdout == ""
+
+
+# --------------------------------------------------------------------------
 # Implementation note: zero-byte file (no header at all)
 # --------------------------------------------------------------------------
 
