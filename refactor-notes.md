@@ -14,7 +14,8 @@ Method: every `-` line of the diff was listed and checked against the new source
   My decision: _open_. AI recommends: keep removed (nothing to restore).
 - The three `except` branches in `main()` (`FileNotFoundError`, `(OSError, UnicodeDecodeError)`, `InputError`). **Not touched; `main()` is byte-identical** and does not appear in the diff. Branch order is unchanged, which matters because `FileNotFoundError` is a subclass of `OSError`.
   One thing to keep in mind: these branches only work because `count_events` still builds its result eagerly, inside the `with open(...)` block, and `Counter(...)` consumes the generator before returning. If a later edit made `count_events` return a lazy iterator, read errors would escape the `try` in `main()`.
-  My decision: _open_. AI recommends: document (the eager-return requirement is now implicit).
+  Update: this is now written into the `count_events` docstring and exercised by `TestInvalidUtf8` (bad byte early, late and in the header; exit 1, no traceback). A throwaway mutant that returned a lazy iterator made 46 tests fail, including the `late` case. That shows the suite notices the regression, not that `TestInvalidUtf8` alone would.
+  My decision: _open_. AI recommends: document (now done in the docstring; the test backs it).
 - Blank-line skip (`if not row: continue`). **Not removed; moved verbatim** into `_valid_rows`, before the width check. The order matters: without the skip, a blank line reaches the width check and produces a spurious `expected 4 columns, got 0` warning.
   My decision: _open_. AI recommends: keep removed (nothing to restore).
 
@@ -36,7 +37,10 @@ Method: every `-` line of the diff was listed and checked against the new source
 - Old and new `count_events` and `format_summary` were compared in memory on 20,000 random inputs plus edge cases, covering counts, formatted output, stderr text and exceptions. No differences.
 - Guard-removal check (3,000 inputs plus five targeted cases): removing the width check, either `or UNKNOWN` fallback, or the blank-line skip from the new code each produced many differences (1,828 / 1,029 / 1,014 / 1,066 of 3,000). So the comparison would have noticed if the refactor had dropped any of them.
 - **After applying** (local, Python 3.14 in `.venv`): `ruff check .` passed, 72 tests passed, and the applied file matched the committed version on 10,000 further random inputs with 0 differences. The CLI printed the same six summary rows for `data/sample_events.csv` (exit 0) and still exited 1 with an error for a missing file.
+- **Verified since the first write-up:**
+  - Python 3.11: CI (Python 3.11) passed on the refactor commit `edd2926`, on both the push and pull_request runs.
+  - `UnicodeDecodeError` partway through a real file: run through the actual CLI on three files with a bad byte (row 2, after about 38 KB and 1,000 valid rows, and inside a header name). All exited 1 with a clean error message and nothing on stdout, identical to the pre-refactor version. Now covered by `TestInvalidUtf8`.
 - **Not verified:**
-  - Python 3.11 (what CI uses) and any type checker (`mypy` and `pyright` are not installed).
-  - A `UnicodeDecodeError` partway through a real file was not exercised. The in-memory inputs are `StringIO` and cannot raise it. The exception still propagates out of the generator and `Counter(...)` to the same `except` in `main()`, but that is reasoning, not a test.
+  - Any type checker (`mypy` and `pyright` are not installed). The "type inferred from the generator" claim and the `reader: Any` loss are unchecked. Installing one is gated by `CLAUDE.md` and has not been done.
   - Only these four guards were mutation-checked.
+  - The lazy-iterator mutant breaks most of the suite, so it does not show that `TestInvalidUtf8` specifically is what catches it. A mutant that goes lazy only past some row count would.

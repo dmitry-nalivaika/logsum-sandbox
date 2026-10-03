@@ -14,6 +14,8 @@
 
 Treat the suite as spec-plus-implementation-notes tests, not as an independent check of the code.
 
+Update: the file header no longer claims "written from spec.md only". It now says most tests derive from the spec and its "Implementation notes", and that `TestInvalidUtf8` (added later) was written from knowledge of the implementation. That class is not independent spec coverage. The suite now has 78 tests (72 originally, plus 6 in `TestInvalidUtf8`).
+
 ## Decision: zero-byte file is a spec ambiguity
 
 The spec covers only "header present, no data rows" (print `No events found.`, exit 0). A zero-byte file (no header) is not named. Classified as a genuine spec ambiguity, not an implementation or test bug.
