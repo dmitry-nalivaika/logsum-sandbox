@@ -632,3 +632,124 @@ class TestZeroByteFile:
         zero = tmp_path / "zero.csv"
         zero.write_bytes(b"")
         assert run_cli(zero).returncode != run_cli(FIXTURES / "header_only.csv").returncode
+
+
+# --------------------------------------------------------------------------
+# AC10: --min-count N (derived from spec.md criterion 10 and its edge cases)
+# --------------------------------------------------------------------------
+
+
+def _counts_csv(tmp_path: Path) -> Path:
+    """Groups with counts 3, 2, 1, 1: svc-a/ERROR=3, svc-a/INFO=2, svc-b/INFO=1, unknown/WARN=1."""
+    rows = (
+        ["t,ERROR,svc-a,m"] * 3
+        + ["t,INFO,svc-a,m"] * 2
+        + ["t,INFO,svc-b,m"]
+        + ["t,WARN,,m"]
+    )
+    return write_csv(tmp_path, HEADER + "\n".join(rows) + "\n")
+
+
+class TestMinCount:
+    def test_default_is_unfiltered(self, tmp_path: Path) -> None:
+        path = _counts_csv(tmp_path)
+        assert run_cli(path).stdout == run_cli(path, "--min-count", "1").stdout
+        assert len(parse_rows(run_cli(path).stdout)) == 4
+
+    def test_threshold_is_inclusive(self, tmp_path: Path) -> None:
+        result = run_cli(_counts_csv(tmp_path), "--min-count", "2")
+        assert result.returncode == 0
+        assert parse_rows(result.stdout) == [("svc-a", "ERROR", 3), ("svc-a", "INFO", 2)]
+
+    def test_higher_threshold_keeps_only_larger_groups(self, tmp_path: Path) -> None:
+        result = run_cli(_counts_csv(tmp_path), "--min-count", "3")
+        assert parse_rows(result.stdout) == [("svc-a", "ERROR", 3)]
+
+    def test_counts_are_not_altered_by_filtering(self, tmp_path: Path) -> None:
+        path = _counts_csv(tmp_path)
+        full = {(s, lvl): n for s, lvl, n in parse_rows(run_cli(path).stdout)}
+        for s, lvl, n in parse_rows(run_cli(path, "--min-count", "2").stdout):
+            assert full[(s, lvl)] == n
+
+    def test_sort_order_preserved(self, tmp_path: Path) -> None:
+        rows = parse_rows(run_cli(_counts_csv(tmp_path), "--min-count", "1").stdout)
+        assert rows == sorted(rows, key=lambda r: (r[0], r[1]))
+
+    def test_unknown_groups_are_filtered_like_any_other(self, tmp_path: Path) -> None:
+        path = _counts_csv(tmp_path)
+        assert ("unknown", "WARN", 1) in parse_rows(run_cli(path).stdout)
+        assert all(r[0] != "unknown" for r in parse_rows(run_cli(path, "--min-count", "2").stdout))
+
+    def test_equals_form_and_flag_before_path(self, tmp_path: Path) -> None:
+        path = _counts_csv(tmp_path)
+        expected = run_cli(path, "--min-count", "2").stdout
+        assert run_cli(path, "--min-count=2").stdout == expected
+        assert run_cli("--min-count", "2", path).stdout == expected
+
+    def test_input_file_not_modified(self, tmp_path: Path) -> None:
+        path = _counts_csv(tmp_path)
+        before = path.read_bytes()
+        run_cli(path, "--min-count", "2")
+        assert path.read_bytes() == before
+
+
+class TestMinCountEmptyAfterFilter:
+    def test_distinct_message_on_stdout_exit_zero(self, tmp_path: Path) -> None:
+        result = run_cli(_counts_csv(tmp_path), "--min-count", "4")
+        assert result.returncode == 0
+        assert result.stdout.strip() == "No groups with count >= 4."
+        assert "No groups with count" not in result.stderr
+
+    def test_not_the_no_events_message(self, tmp_path: Path) -> None:
+        result = run_cli(_counts_csv(tmp_path), "--min-count", "4")
+        assert "No events found." not in result.stdout
+
+    def test_header_only_still_says_no_events_found(self) -> None:
+        result = run_cli(FIXTURES / "header_only.csv", "--min-count", "5")
+        assert result.returncode == 0
+        assert result.stdout.strip() == "No events found."
+
+    def test_all_malformed_still_says_no_events_found(self, tmp_path: Path) -> None:
+        path = write_csv(tmp_path, HEADER + "only-one-field\nt,INFO\n")
+        result = run_cli(path, "--min-count", "2")
+        assert result.returncode == 0
+        assert result.stdout.strip() == "No events found."
+
+
+class TestMinCountOtherBehaviourUnchanged:
+    def test_malformed_row_warnings_still_on_stderr(self) -> None:
+        plain = run_cli(FIXTURES / "malformed_rows.csv")
+        filtered = run_cli(FIXTURES / "malformed_rows.csv", "--min-count", "99")
+        assert plain.stderr.strip() != ""
+        assert filtered.stderr == plain.stderr
+
+    def test_missing_file_still_exits_one(self, tmp_path: Path) -> None:
+        result = run_cli(tmp_path / "nope.csv", "--min-count", "2")
+        assert result.returncode == 1
+        assert result.stdout == ""
+
+    def test_missing_column_still_exits_one(self) -> None:
+        result = run_cli(FIXTURES / "missing_level_column.csv", "--min-count", "2")
+        assert result.returncode == 1
+        assert result.stdout == ""
+
+
+class TestMinCountInvalidValue:
+    @pytest.mark.parametrize("bad", ["abc", "1.5", "0", "-1", ""])
+    def test_rejected_with_usage_error(self, tmp_path: Path, bad: str) -> None:
+        result = run_cli(_counts_csv(tmp_path), "--min-count", bad)
+        assert result.returncode == 2
+        assert result.stdout == ""
+        assert result.stderr.strip() != ""
+        assert "Traceback" not in result.stderr
+
+    def test_missing_value_rejected(self, tmp_path: Path) -> None:
+        result = run_cli(_counts_csv(tmp_path), "--min-count")
+        assert result.returncode == 2
+        assert result.stdout == ""
+        assert "Traceback" not in result.stderr
+
+    def test_rejected_before_reading_the_file(self, tmp_path: Path) -> None:
+        result = run_cli(tmp_path / "nope.csv", "--min-count", "0")
+        assert result.returncode == 2
+        assert "not found" not in result.stderr
