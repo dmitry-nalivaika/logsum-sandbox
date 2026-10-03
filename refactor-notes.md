@@ -4,7 +4,7 @@ Scope: the proposed split of `count_events` in `src/logsum.py` into `_Columns`, 
 
 Method: every `-` line of the diff was listed and checked against the new source. The four areas flagged for scrutiny (width check, `or UNKNOWN` fallbacks, the three `except` branches in `main()`, blank-line skip) were also removed one at a time from the new code in memory, to confirm the old-vs-new comparison would notice each loss (results at the end).
 
-Decisions: all nine were recorded in one step on the instruction "accept all", each as "accepted from AI recommendation". That means the AI's recommendation was adopted as given. It is not nine separate judgments, and it does not mean each entry was weighed individually.
+Decisions: all nine were recorded in one step on the instruction "accept all after review each line", each as "accepted from AI recommendation". That means the AI's recommendation was adopted as given. It is not nine separate judgments, and it does not mean each entry was weighed individually.
 
 ### Areas flagged for scrutiny: none of these was removed
 
