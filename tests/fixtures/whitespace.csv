@@ -1,0 +1,6 @@
+timestamp,level,service,message
+t1,INFO,checkout-service,a
+t2, INFO , checkout-service ,b
+t3,INFO,  checkout-service,c
+t4,  ,checkout-service,d
+t5,INFO,   ,e

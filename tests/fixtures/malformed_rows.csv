@@ -1,0 +1,6 @@
+timestamp,level,service,message
+t1,INFO,cart-api,good
+t2,INFO
+t3,ERROR,cart-api,good
+just-one-field
+t4,INFO,cart-api,good
