@@ -4,8 +4,8 @@ import argparse
 import csv
 import sys
 from collections import Counter
-from collections.abc import Iterable, Sequence
-from typing import TextIO
+from collections.abc import Iterable, Iterator, Sequence
+from typing import Any, NamedTuple, TextIO
 
 UNKNOWN = "unknown"
 REQUIRED_COLUMNS = ("service", "level")
@@ -16,13 +16,16 @@ class InputError(Exception):
     """Input cannot be processed; maps to exit status 1."""
 
 
-def count_events(
-    lines: Iterable[str], warn: TextIO | None = None
-) -> Counter[tuple[str, str]]:
-    """Count rows per (service, level) from CSV lines."""
-    warn = warn if warn is not None else sys.stderr
-    reader = csv.reader(lines)
+class _Columns(NamedTuple):
+    """Positions of the columns logsum needs, plus the expected row width."""
 
+    service: int
+    level: int
+    width: int
+
+
+def _read_columns(reader: Any) -> _Columns:
+    """Consume the header row and locate the required columns."""
     try:
         header = next(reader, None)
     except csv.Error as exc:
@@ -35,16 +38,20 @@ def count_events(
     if missing:
         raise InputError("missing required column(s): " + ", ".join(missing))
 
-    service_idx = names.index("service")
-    level_idx = names.index("level")
-    width = len(names)
-    counts: Counter[tuple[str, str]] = Counter()
+    return _Columns(names.index("service"), names.index("level"), len(names))
 
+
+def _valid_rows(reader: Any, width: int, warn: TextIO) -> Iterator[list[str]]:
+    """Yield data rows of the expected width.
+
+    Blank lines are skipped silently. Unparseable and wrong-width rows are
+    skipped with a warning on ``warn``.
+    """
     while True:
         try:
             row = next(reader)
         except StopIteration:
-            break
+            return
         except csv.Error as exc:
             print(
                 f"warning: line {reader.line_num}: skipping unparseable row: {exc}",
@@ -61,12 +68,24 @@ def count_events(
                 file=warn,
             )
             continue
+        yield row
 
-        service = row[service_idx].strip() or UNKNOWN
-        level = row[level_idx].strip() or UNKNOWN
-        counts[(service, level)] += 1
 
-    return counts
+def count_events(
+    lines: Iterable[str], warn: TextIO | None = None
+) -> Counter[tuple[str, str]]:
+    """Count rows per (service, level) from CSV lines."""
+    warn = warn if warn is not None else sys.stderr
+    reader = csv.reader(lines)
+    columns = _read_columns(reader)
+
+    return Counter(
+        (
+            row[columns.service].strip() or UNKNOWN,
+            row[columns.level].strip() or UNKNOWN,
+        )
+        for row in _valid_rows(reader, columns.width, warn)
+    )
 
 
 def format_summary(counts: Counter[tuple[str, str]]) -> list[str]:
