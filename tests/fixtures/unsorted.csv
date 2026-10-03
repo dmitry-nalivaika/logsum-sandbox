@@ -1,0 +1,8 @@
+timestamp,level,service,message
+t1,WARN,identity-service,a
+t2,INFO,checkout-service,b
+t3,ERROR,cart-api,c
+t4,INFO,cart-api,d
+t5,DEBUG,checkout-service,e
+t6,ERROR,checkout-service,f
+t7,INFO,identity-service,g

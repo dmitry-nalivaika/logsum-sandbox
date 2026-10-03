@@ -1,0 +1,4 @@
+timestamp,level,service,message
+t1,INFO,,no service
+t2,INFO,,still no service
+t3,INFO,cart-api,normal

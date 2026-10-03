@@ -1,0 +1,4 @@
+timestamp,level,service,message
+t1,INFO,cart-api,ok
+t2,INFO,cart-api,ok,extra,fields
+t3,INFO,cart-api,ok
