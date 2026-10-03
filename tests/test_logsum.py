@@ -1,4 +1,10 @@
-"""Black-box tests for the logsum CLI, written from spec.md only.
+"""Black-box tests for the logsum CLI.
+
+Most tests derive from spec.md, including its "Implementation notes" section.
+``TestInvalidUtf8`` is the exception: it was added from knowledge of the
+implementation (the eager-evaluation contract between ``count_events`` and
+``main()``), not from the spec text. Do not read it as independent spec
+coverage. See test-notes.md.
 
 The CLI is exercised as a subprocess (``python src/logsum.py <csv>``), so the
 tests depend only on the observable contract: argv, stdout, stderr, exit code.

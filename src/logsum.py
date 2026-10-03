@@ -74,7 +74,13 @@ def _valid_rows(reader: Any, width: int, warn: TextIO) -> Iterator[list[str]]:
 def count_events(
     lines: Iterable[str], warn: TextIO | None = None
 ) -> Counter[tuple[str, str]]:
-    """Count rows per (service, level) from CSV lines."""
+    """Count rows per (service, level) from CSV lines.
+
+    Builds and returns a fully materialised ``Counter``; do not return the
+    lazy generator. ``main()`` relies on all reading, including any
+    ``UnicodeDecodeError``, finishing inside its ``with open(...)`` and
+    ``try`` block (enforced by ``TestInvalidUtf8`` in the tests).
+    """
     warn = warn if warn is not None else sys.stderr
     reader = csv.reader(lines)
     columns = _read_columns(reader)
