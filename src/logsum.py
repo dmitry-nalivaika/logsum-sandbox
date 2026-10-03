@@ -24,6 +24,8 @@ class _Columns(NamedTuple):
     width: int
 
 
+# `reader: Any` (here and on _valid_rows): the precise type is the private
+# `_csv._reader`. Known, accepted loss of type precision; see refactor-notes.md.
 def _read_columns(reader: Any) -> _Columns:
     """Consume the header row and locate the required columns."""
     try:
@@ -41,6 +43,7 @@ def _read_columns(reader: Any) -> _Columns:
     return _Columns(names.index("service"), names.index("level"), len(names))
 
 
+# `reader: Any`: same accepted loss as _read_columns; see refactor-notes.md.
 def _valid_rows(reader: Any, width: int, warn: TextIO) -> Iterator[list[str]]:
     """Yield data rows of the expected width.
 
